@@ -14,23 +14,24 @@ import (
 type Player struct {
 	demoInfoProvider demoInfoProvider // provider for demo info such as tick-rate or current tick
 
-	SteamID64           uint64             // 64-bit representation of the user's Steam ID. See https://developer.valvesoftware.com/wiki/SteamID
-	UserID              int                // Mostly used in game-events to address this player
-	Name                string             // Steam / in-game user name
-	Inventory           map[int]*Equipment // All weapons / equipment the player is currently carrying. See also Weapons().
-	EntityID            int                // Usually the same as Entity.ID() but may be different between player death and re-spawn.
-	Entity              st.Entity          // May be nil between player-death and re-spawn
-	FlashDuration       float32            // Effective blindness duration from the flashbang currently affecting the player (seconds). The engine's flash-affected window (e.g. for assist attribution) runs ~1.4x longer; there is no continuous remaining-intensity netprop.
-	FlashTick           int                // In-game tick at which the player was last flashed
-	TeamState           *TeamState         // When keeping the reference make sure you notice when the player changes teams
-	Team                Team               // Team identifier for the player (e.g. TeamTerrorists or TeamCounterTerrorists).
-	IsBot               bool               // True if this is a bot-entity. See also IsControllingBot and ControlledBot().
-	IsConnected         bool
-	IsDefusing          bool
-	IsPlanting          bool
-	IsReloading         bool
-	IsUnknown           bool   // Used to identify unknown/broken players. see https://github.com/markus-wa/demoinfocs-golang/issues/162
-	ButtonsPressedState uint64 // Pressed buttons state represented as an uint64. You can use IsPressingButton(buttonMask) to check for specific buttons.
+	SteamID64             uint64             // 64-bit representation of the user's Steam ID. See https://developer.valvesoftware.com/wiki/SteamID
+	UserID                int                // Mostly used in game-events to address this player
+	Name                  string             // Steam / in-game user name
+	Inventory             map[int]*Equipment // All weapons / equipment the player is currently carrying. See also Weapons().
+	EntityID              int                // Usually the same as Entity.ID() but may be different between player death and re-spawn.
+	Entity                st.Entity          // May be nil between player-death and re-spawn
+	FlashDuration         float32            // Effective blindness duration from the flashbang currently affecting the player (seconds). The engine's flash-affected window (e.g. for assist attribution) runs ~1.4x longer; there is no continuous remaining-intensity netprop.
+	FlashTick             int                // In-game tick at which the player was last flashed
+	TeamState             *TeamState         // When keeping the reference make sure you notice when the player changes teams
+	Team                  Team               // Team identifier for the player (e.g. TeamTerrorists or TeamCounterTerrorists).
+	IsBot                 bool               // True if this is a bot-entity. See also IsControllingBot and ControlledBot().
+	IsConnected           bool
+	IsDefusing            bool
+	IsPlanting            bool
+	IsReloading           bool
+	IsUnknown             bool   // Used to identify unknown/broken players. see https://github.com/markus-wa/demoinfocs-golang/issues/162
+	ButtonsStateAvailable bool   // True after a successfully decoded command or legacy button property.
+	ButtonsPressedState   uint64 // Pressed buttons state represented as an uint64. You can use IsPressingButton(buttonMask) to check for specific buttons.
 }
 
 func (p *Player) PlayerPawnEntity() st.Entity {

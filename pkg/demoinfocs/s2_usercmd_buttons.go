@@ -129,6 +129,10 @@ func mergeUserCmdButtons(data []byte, level int, buttons *uint64) error {
 
 //nolint:gocognit,nestif,funlen
 func (p *parser) handleUserCommandButtons(m *msg.CSVCMsg_UserCommands) {
+	p.handleUserCommandButtonsWithCheckpoint(m, false)
+}
+
+func (p *parser) handleUserCommandButtonsWithCheckpoint(m *msg.CSVCMsg_UserCommands, checkpoint bool) {
 	p.hasUserCmdMessages = true
 
 	for _, cmd := range m.Commands {
@@ -147,6 +151,9 @@ func (p *parser) handleUserCommandButtons(m *msg.CSVCMsg_UserCommands) {
 			p.userCmdButtonStates[slot] = state
 		}
 
+		if checkpoint && state.hasCurrentCommand && cmd.GetCmdNumber() < state.currentCommandNumber {
+			continue
+		}
 		var buttons uint64
 		if data := cmd.GetData(); len(data) > 0 {
 			if err := mergeUserCmdButtons(data, 0, &buttons); err != nil {
@@ -215,12 +222,15 @@ func (p *parser) handleUserCommandButtons(m *msg.CSVCMsg_UserCommands) {
 			continue
 		}
 
+		player.ButtonsStateAvailable = true
 		if player.ButtonsPressedState != buttons {
 			player.ButtonsPressedState = buttons
-			p.eventDispatcher.Dispatch(events.PlayerButtonsStateUpdate{
-				Player:       player,
-				ButtonsState: buttons,
-			})
+			if !checkpoint {
+				p.eventDispatcher.Dispatch(events.PlayerButtonsStateUpdate{
+					Player:       player,
+					ButtonsState: buttons,
+				})
+			}
 		}
 	}
 }

@@ -353,9 +353,13 @@ func (p *parser) handleDemoPacket(pack *msg.CDemoPacket, isFullPacket bool) {
 
 	for _, m := range p.pendingMessagesCache {
 		if isFullPacket && m.t == int32(msg.SVC_Messages_svc_UserCmds) {
-			// Full packets are seek/checkpoint snapshots. Their embedded
-			// usercmds are not transports delivered to the command handler;
-			// replaying them would duplicate the following packet stream.
+			commands := &msg.CSVCMsg_UserCommands{}
+			if err := proto.Unmarshal(m.buf, commands); err != nil {
+				panic(err)
+			}
+			// Keep checkpoint baselines in dispatcher order, without emitting
+			// duplicate command or button events from checkpoint snapshots.
+			p.msgQueue <- &checkpointUserCommands{commands}
 			continue
 		}
 
@@ -442,13 +446,23 @@ func getGameEventListBinForProtocol(networkProtocol int) ([]byte, error) {
 }
 
 //nolint:gocognit,nestif,funlen
+type checkpointUserCommands struct{ commands *msg.CSVCMsg_UserCommands }
+
+func (p *parser) handleCheckpointUserCommands(checkpoint *checkpointUserCommands) {
+	p.reconstructUserCommands(checkpoint.commands, true)
+}
+
 func (p *parser) handleUserCommands(m *msg.CSVCMsg_UserCommands) {
+	p.reconstructUserCommands(m, false)
+}
+
+func (p *parser) reconstructUserCommands(m *msg.CSVCMsg_UserCommands, checkpoint bool) {
 	if p.config.UserCmdParsing == UserCmdParsingDisabled {
 		return
 	}
 
 	if p.config.UserCmdParsing == UserCmdParsingButtonsOnly {
-		p.handleUserCommandButtons(m)
+		p.handleUserCommandButtonsWithCheckpoint(m, checkpoint)
 		return
 	}
 
@@ -471,6 +485,10 @@ func (p *parser) handleUserCommands(m *msg.CSVCMsg_UserCommands) {
 		if state == nil {
 			state = &userCmdPlayerState{}
 			p.userCmdStates[slot] = state
+		}
+
+		if checkpoint && state.hasCurrentCommand && cmd.GetCmdNumber() < state.currentCommandNumber {
+			continue
 		}
 
 		var next *msg.CSGOUserCmdPB
@@ -544,26 +562,35 @@ func (p *parser) handleUserCommands(m *msg.CSVCMsg_UserCommands) {
 		// Player slots map to controller entities: slot N is entity N+1
 		// (getOrCreatePlayerFromControllerEntity relies on the same convention).
 		player := p.gameState.playersByEntityID[int(slot)+1]
-		p.eventDispatcher.Dispatch(events.UserCmd{
-			Player:             player,
-			PlayerSlot:         slot,
-			CommandNumber:      commandNumber,
-			ServerTickExecuted: cmd.GetServerTickExecuted(),
-			ClientTick:         cmd.GetClientTick(),
-			Command:            next,
-		})
+		if !checkpoint {
+			p.eventDispatcher.Dispatch(events.UserCmd{
+				Player:             player,
+				PlayerSlot:         slot,
+				CommandNumber:      commandNumber,
+				ServerTickExecuted: cmd.GetServerTickExecuted(),
+				ClientTick:         cmd.GetClientTick(),
+				Command:            next,
+			})
+		}
 
 		if player == nil {
 			continue
 		}
 
-		newState := next.GetBase().GetButtonsPb().GetButtonstate1()
+		buttons := next.GetBase().GetButtonsPb()
+		if buttons == nil || buttons.Buttonstate1 == nil {
+			continue
+		}
+		player.ButtonsStateAvailable = true
+		newState := buttons.GetButtonstate1()
 		if player.ButtonsPressedState != newState {
 			player.ButtonsPressedState = newState
-			p.eventDispatcher.Dispatch(events.PlayerButtonsStateUpdate{
-				Player:       player,
-				ButtonsState: newState,
-			})
+			if !checkpoint {
+				p.eventDispatcher.Dispatch(events.PlayerButtonsStateUpdate{
+					Player:       player,
+					ButtonsState: newState,
+				})
+			}
 		}
 	}
 }

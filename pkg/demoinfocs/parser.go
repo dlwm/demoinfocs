@@ -648,6 +648,7 @@ func NewParserWithConfig(demostream io.Reader, config ParserConfig) Parser {
 	p.msgDispatcher.RegisterHandler(p.handleFrameParsed)
 	p.msgDispatcher.RegisterHandler(p.gameState.handleIngameTickNumber)
 	p.msgDispatcher.RegisterHandler(p.handleUserCommands)
+	p.msgDispatcher.RegisterHandler(p.handleCheckpointUserCommands)
 
 	if config.MsgQueueBufferSize >= 0 {
 		p.initMsgQueue(config.MsgQueueBufferSize)
